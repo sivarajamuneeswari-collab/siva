@@ -1,0 +1,1326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Discretion — Dog Bark Detection & Safety Alert System</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #050a0e;
+    --surface: #0d1a22;
+    --border: #1a3040;
+    --accent: #00e5ff;
+    --accent2: #ff6b35;
+    --accent3: #39ff14;
+    --text: #e8f4f8;
+    --muted: #6a8fa0;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    overflow-x: hidden;
+    cursor: none;
+  }
+
+  .cursor {
+    position: fixed;
+    width: 12px; height: 12px;
+    background: var(--accent);
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 9999;
+    transform: translate(-50%, -50%);
+    transition: transform 0.1s, width 0.2s, height 0.2s;
+    mix-blend-mode: screen;
+  }
+  .cursor-ring {
+    position: fixed;
+    width: 40px; height: 40px;
+    border: 1px solid var(--accent);
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 9998;
+    transform: translate(-50%, -50%);
+    transition: transform 0.15s, opacity 0.2s;
+    opacity: 0.5;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: 
+      linear-gradient(rgba(0,229,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,229,255,0.03) 1px, transparent 1px);
+    background-size: 60px 60px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.4;
+  }
+
+  nav {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 100;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.2rem 3rem;
+    border-bottom: 1px solid var(--border);
+    background: rgba(5,10,14,0.85);
+    backdrop-filter: blur(12px);
+  }
+  .nav-logo {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 1.4rem;
+    letter-spacing: -0.02em;
+    color: var(--accent);
+  }
+  .nav-logo span { color: var(--accent2); }
+  .nav-links {
+    display: flex;
+    gap: 2rem;
+    list-style: none;
+  }
+  .nav-links a {
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 0.75rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    transition: color 0.2s;
+  }
+  .nav-links a:hover { color: var(--accent); }
+
+  .hero {
+    position: relative;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    padding: 8rem 3rem 4rem;
+    z-index: 1;
+    overflow: hidden;
+  }
+
+  .hero-glow {
+    position: absolute;
+    width: 600px; height: 600px;
+    background: radial-gradient(circle, rgba(0,229,255,0.08) 0%, transparent 70%);
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    animation: pulse 4s ease-in-out infinite;
+    pointer-events: none;
+  }
+
+  @keyframes pulse {
+    0%, 100% { transform: translate(-50%,-50%) scale(1); opacity: 0.8; }
+    50% { transform: translate(-50%,-50%) scale(1.15); opacity: 1; }
+  }
+
+  .hero-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    border: 1px solid var(--accent3);
+    color: var(--accent3);
+    font-size: 0.65rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    padding: 0.4rem 1rem;
+    border-radius: 2px;
+    margin-bottom: 2rem;
+    animation: fadeInUp 0.8s ease both;
+  }
+  .dot {
+    width: 6px; height: 6px;
+    background: var(--accent3);
+    border-radius: 50%;
+    animation: blink 1.2s step-end infinite;
+  }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+  .hero-title {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: clamp(3rem, 8vw, 6.5rem);
+    line-height: 0.95;
+    letter-spacing: -0.04em;
+    margin-bottom: 1.5rem;
+    animation: fadeInUp 0.8s 0.1s ease both;
+  }
+  .hero-title .line1 { display: block; color: var(--text); }
+  .hero-title .line2 { display: block; color: var(--accent); }
+  .hero-title .line3 { display: block; color: var(--muted); font-size: 0.55em; font-weight: 400; font-family: 'Space Mono', monospace; letter-spacing: 0.02em; margin-top: 0.5rem; }
+
+  .hero-desc {
+    max-width: 560px;
+    color: var(--muted);
+    font-size: 0.85rem;
+    line-height: 1.8;
+    margin-bottom: 3rem;
+    animation: fadeInUp 0.8s 0.2s ease both;
+  }
+
+  .hero-cta {
+    display: flex;
+    gap: 1rem;
+    animation: fadeInUp 0.8s 0.3s ease both;
+  }
+  .btn-primary {
+    background: var(--accent);
+    color: #000;
+    padding: 0.85rem 2rem;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    border: none;
+    cursor: none;
+    text-decoration: none;
+    transition: transform 0.2s, box-shadow 0.2s;
+    display: inline-block;
+  }
+  .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(0,229,255,0.3); }
+  .btn-outline {
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 0.85rem 2rem;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.75rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    text-decoration: none;
+    transition: border-color 0.2s, color 0.2s;
+    display: inline-block;
+  }
+  .btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+
+  .hero-visual {
+    position: absolute;
+    right: 3rem;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 420px;
+    animation: fadeInUp 1s 0.4s ease both;
+  }
+
+  .waveform {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    height: 120px;
+    margin-bottom: 2rem;
+  }
+  .wave-bar {
+    flex: 1;
+    background: var(--accent);
+    border-radius: 2px;
+    animation: wave 1.2s ease-in-out infinite;
+    opacity: 0.8;
+  }
+  @keyframes wave {
+    0%, 100% { height: 20%; }
+    50% { height: 100%; }
+  }
+  .wave-bar:nth-child(1) { animation-delay: 0s; background: var(--accent); }
+  .wave-bar:nth-child(2) { animation-delay: 0.08s; }
+  .wave-bar:nth-child(3) { animation-delay: 0.16s; }
+  .wave-bar:nth-child(4) { animation-delay: 0.24s; background: var(--accent2); }
+  .wave-bar:nth-child(5) { animation-delay: 0.32s; }
+  .wave-bar:nth-child(6) { animation-delay: 0.4s; }
+  .wave-bar:nth-child(7) { animation-delay: 0.48s; background: var(--accent3); }
+  .wave-bar:nth-child(8) { animation-delay: 0.56s; }
+  .wave-bar:nth-child(9) { animation-delay: 0.64s; }
+  .wave-bar:nth-child(10) { animation-delay: 0.72s; background: var(--accent2); }
+  .wave-bar:nth-child(11) { animation-delay: 0.8s; }
+  .wave-bar:nth-child(12) { animation-delay: 0.88s; }
+  .wave-bar:nth-child(13) { animation-delay: 0.96s; }
+  .wave-bar:nth-child(14) { animation-delay: 1.04s; }
+  .wave-bar:nth-child(15) { animation-delay: 1.12s; background: var(--accent); }
+  .wave-bar:nth-child(16) { animation-delay: 0.56s; }
+  .wave-bar:nth-child(17) { animation-delay: 0.4s; }
+  .wave-bar:nth-child(18) { animation-delay: 0.16s; }
+  .wave-bar:nth-child(19) { animation-delay: 0.72s; }
+  .wave-bar:nth-child(20) { animation-delay: 0.32s; }
+
+  .status-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 1.2rem 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+  .status-icon {
+    width: 40px; height: 40px;
+    background: rgba(0,229,255,0.1);
+    border: 1px solid var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    flex-shrink: 0;
+  }
+  .status-label { font-size: 0.65rem; color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; }
+  .status-val { font-size: 0.9rem; color: var(--accent3); font-weight: 700; margin-top: 2px; }
+
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(30px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  section {
+    position: relative;
+    z-index: 1;
+    padding: 6rem 3rem;
+  }
+  .section-label {
+    font-size: 0.65rem;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--accent2);
+    margin-bottom: 0.8rem;
+  }
+  .section-title {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: clamp(2rem, 5vw, 3.5rem);
+    line-height: 1;
+    letter-spacing: -0.03em;
+    margin-bottom: 1.5rem;
+  }
+  .section-divider {
+    width: calc(100% - 6rem);
+    height: 1px;
+    background: var(--border);
+    margin: 0 3rem;
+  }
+
+  #abstract { max-width: 900px; margin: 0 auto; }
+  .abstract-text {
+    font-size: 0.9rem;
+    line-height: 2;
+    color: var(--muted);
+    border-left: 3px solid var(--accent);
+    padding-left: 2rem;
+    margin-top: 2rem;
+  }
+  .abstract-text p { margin-bottom: 1.5rem; }
+  .abstract-text p:last-child { margin-bottom: 0; }
+  .highlight { color: var(--accent); font-weight: 700; }
+
+  .flow-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 0;
+    margin-top: 3rem;
+    border: 1px solid var(--border);
+  }
+  .flow-step {
+    padding: 2rem;
+    border-right: 1px solid var(--border);
+    position: relative;
+    transition: background 0.3s;
+  }
+  .flow-step:last-child { border-right: none; }
+  .flow-step:hover { background: var(--surface); }
+  .flow-num {
+    font-family: 'Syne', sans-serif;
+    font-size: 4rem;
+    font-weight: 800;
+    color: var(--border);
+    line-height: 1;
+    margin-bottom: 1rem;
+    transition: color 0.3s;
+  }
+  .flow-step:hover .flow-num { color: var(--accent); }
+  .flow-icon { font-size: 2rem; margin-bottom: 0.8rem; }
+  .flow-title { font-size: 0.85rem; font-weight: 700; margin-bottom: 0.5rem; letter-spacing: 0.05em; }
+  .flow-desc { font-size: 0.72rem; color: var(--muted); line-height: 1.7; }
+  .flow-arrow {
+    position: absolute;
+    right: -12px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 24px; height: 24px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    z-index: 2;
+    color: var(--accent);
+  }
+
+  .components-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 1px;
+    margin-top: 3rem;
+    background: var(--border);
+  }
+  .component-card {
+    background: var(--bg);
+    padding: 2rem;
+    transition: background 0.3s;
+    position: relative;
+    overflow: hidden;
+  }
+  .component-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 3px;
+    height: 0;
+    background: var(--accent);
+    transition: height 0.3s;
+  }
+  .component-card:hover::before { height: 100%; }
+  .component-card:hover { background: var(--surface); }
+  .comp-tag { font-size: 0.6rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--accent2); margin-bottom: 0.8rem; }
+  .comp-name { font-family: 'Syne', sans-serif; font-size: 1.1rem; font-weight: 700; margin-bottom: 0.5rem; }
+  .comp-desc { font-size: 0.72rem; color: var(--muted); line-height: 1.7; }
+  .comp-spec {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+    font-size: 0.65rem;
+    color: var(--accent3);
+    letter-spacing: 0.1em;
+  }
+
+  .specs-wrap { margin-top: 3rem; border: 1px solid var(--border); overflow: hidden; }
+  table { width: 100%; border-collapse: collapse; }
+  th {
+    background: var(--surface);
+    padding: 1rem 1.5rem;
+    font-size: 0.65rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted);
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  td {
+    padding: 1rem 1.5rem;
+    font-size: 0.78rem;
+    border-bottom: 1px solid rgba(26,48,64,0.5);
+    line-height: 1.5;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--surface); }
+  td:first-child { color: var(--muted); }
+  td:last-child { color: var(--text); }
+  .spec-val { color: var(--accent) !important; font-weight: 700; }
+
+  .scope-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1.5rem;
+    margin-top: 3rem;
+  }
+  .scope-item {
+    border: 1px solid var(--border);
+    padding: 1.8rem;
+    transition: border-color 0.3s, transform 0.3s;
+  }
+  .scope-item:hover { border-color: var(--accent); transform: translateY(-4px); }
+  .scope-icon { font-size: 2rem; margin-bottom: 1rem; }
+  .scope-title { font-size: 0.85rem; font-weight: 700; margin-bottom: 0.5rem; }
+  .scope-desc { font-size: 0.72rem; color: var(--muted); line-height: 1.7; }
+
+  footer {
+    position: relative;
+    z-index: 1;
+    border-top: 1px solid var(--border);
+    padding: 4rem 3rem 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+  }
+  .footer-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 2rem;
+  }
+  .footer-brand { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 2rem; color: var(--accent); }
+  .footer-brand span { color: var(--accent2); }
+  .footer-tagline { font-size: 0.72rem; color: var(--muted); margin-top: 0.5rem; max-width: 280px; line-height: 1.7; }
+  .footer-info { text-align: right; }
+  .footer-info p { font-size: 0.72rem; color: var(--muted); margin-bottom: 0.3rem; }
+  .footer-info strong { color: var(--text); }
+  .footer-bottom {
+    border-top: 1px solid var(--border);
+    padding-top: 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.65rem;
+    color: var(--muted);
+  }
+  .freq-badge {
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    padding: 0.3rem 0.8rem;
+    font-size: 0.65rem;
+    letter-spacing: 0.15em;
+  }
+
+  .reveal {
+    opacity: 0;
+    transform: translateY(40px);
+    transition: opacity 0.7s ease, transform 0.7s ease;
+  }
+  .reveal.visible { opacity: 1; transform: none; }
+
+  .sysdesign-wrap {
+    margin-top: 3rem;
+    border: 1px solid var(--border);
+    padding: 3rem;
+    background: var(--surface);
+    overflow-x: auto;
+  }
+  .block-diagram {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0;
+    min-width: 900px;
+    position: relative;
+  }
+  .bd-col { display: flex; flex-direction: column; align-items: center; gap: 1rem; }
+  .bd-block {
+    border: 1.5px solid var(--border);
+    background: var(--bg);
+    padding: 1rem 1.2rem;
+    text-align: center;
+    min-width: 130px;
+    position: relative;
+    transition: border-color 0.3s, transform 0.3s;
+    cursor: default;
+  }
+  .bd-block:hover { border-color: var(--accent); transform: scale(1.04); }
+  .bd-block.active-anim { border-color: var(--accent3) !important; box-shadow: 0 0 18px rgba(57,255,20,0.25); }
+  .bd-block-icon { font-size: 1.6rem; margin-bottom: 0.3rem; }
+  .bd-block-name { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.05em; }
+  .bd-block-sub { font-size: 0.6rem; color: var(--muted); margin-top: 0.2rem; }
+  .bd-block.power { border-color: #ff6b35; }
+  .bd-block.power:hover { border-color: #ff6b35; box-shadow: 0 0 14px rgba(255,107,53,0.2); }
+  .bd-block.sensor { border-color: var(--accent); }
+  .bd-block.main { border-color: var(--accent); background: rgba(0,229,255,0.05); }
+  .bd-block.output { border-color: var(--accent3); }
+  .bd-block.alert { border-color: var(--accent2); }
+
+  .bd-arrow { display: flex; align-items: center; flex-shrink: 0; width: 50px; }
+  .bd-arrow-line {
+    flex: 1;
+    height: 2px;
+    background: linear-gradient(90deg, var(--accent), rgba(0,229,255,0.2));
+    position: relative;
+  }
+  .bd-arrow-head {
+    width: 0; height: 0;
+    border-top: 6px solid transparent;
+    border-bottom: 6px solid transparent;
+    border-left: 10px solid var(--accent);
+  }
+  .bd-arrow.up-down { flex-direction: column; width: auto; height: 40px; }
+  .bd-arrow.up-down .bd-arrow-line {
+    width: 2px; height: 100%;
+    background: linear-gradient(180deg, var(--accent2), rgba(255,107,53,0.2));
+  }
+  .bd-arrow.up-down .bd-arrow-head {
+    width: 0; height: 0;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-top: 10px solid var(--accent2);
+    border-bottom: none;
+  }
+  .bd-label { font-size: 0.58rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); text-align: center; margin-top: 0.5rem; }
+
+  .sysdesign-legend { display: flex; gap: 2rem; margin-top: 2rem; flex-wrap: wrap; }
+  .legend-item { display: flex; align-items: center; gap: 0.5rem; font-size: 0.65rem; color: var(--muted); }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+  .demo-wrap {
+    margin-top: 3rem;
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    gap: 2rem;
+    align-items: start;
+  }
+  .demo-player {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    overflow: hidden;
+    position: relative;
+    aspect-ratio: 16/9;
+  }
+  .demo-canvas { width: 100%; height: 100%; display: block; }
+  .demo-controls {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--border);
+    background: var(--bg);
+  }
+  .demo-play-btn {
+    width: 36px; height: 36px;
+    background: var(--accent);
+    border: none;
+    cursor: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 0.8rem;
+    transition: background 0.2s;
+  }
+  .demo-play-btn:hover { background: #00b8cc; }
+  .demo-progress-wrap { flex: 1; height: 4px; background: var(--border); position: relative; cursor: none; }
+  .demo-progress-bar { height: 100%; background: var(--accent); width: 0%; transition: width 0.1s linear; }
+  .demo-time { font-size: 0.65rem; color: var(--muted); white-space: nowrap; }
+  .demo-stage-label {
+    position: absolute;
+    bottom: 1rem; left: 1rem;
+    font-size: 0.65rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--accent3);
+    background: rgba(5,10,14,0.85);
+    padding: 0.3rem 0.8rem;
+    border: 1px solid var(--accent3);
+  }
+
+  .demo-steps { display: flex; flex-direction: column; gap: 0; border: 1px solid var(--border); }
+  .demo-step {
+    padding: 1.2rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+    transition: background 0.3s;
+  }
+  .demo-step:last-child { border-bottom: none; }
+  .demo-step.active { background: rgba(0,229,255,0.05); }
+  .demo-step-num {
+    width: 28px; height: 28px;
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.65rem;
+    flex-shrink: 0;
+    color: var(--muted);
+    transition: border-color 0.3s, color 0.3s;
+  }
+  .demo-step.active .demo-step-num { border-color: var(--accent); color: var(--accent); }
+  .demo-step-title { font-size: 0.78rem; font-weight: 700; margin-bottom: 0.2rem; }
+  .demo-step-desc { font-size: 0.67rem; color: var(--muted); line-height: 1.6; }
+
+  @media(max-width: 900px) {
+    .demo-wrap { grid-template-columns: 1fr; }
+    .block-diagram { min-width: 700px; }
+    .hero-visual { display: none; }
+    nav { padding: 1rem 1.5rem; }
+    section { padding: 4rem 1.5rem; }
+    .flow-grid { grid-template-columns: 1fr; }
+    .flow-step { border-right: none; border-bottom: 1px solid var(--border); }
+    .flow-step:last-child { border-bottom: none; }
+    .flow-arrow { display: none; }
+    footer { padding: 3rem 1.5rem 2rem; }
+    .footer-info { text-align: left; }
+  }
+</style>
+</head>
+<body>
+
+<div class="cursor" id="cursor"></div>
+<div class="cursor-ring" id="cursorRing"></div>
+
+<nav>
+  <div class="nav-logo">DIS<span>CRETION</span></div>
+  <ul class="nav-links">
+    <li><a href="#abstract">Abstract</a></li>
+    <li><a href="#system-design">System Design</a></li>
+    <li><a href="#demo">Demo</a></li>
+    <li><a href="#how">How It Works</a></li>
+    <li><a href="#components">Components</a></li>
+    <li><a href="#specs">Specs</a></li>
+    <li><a href="#scope">Future</a></li>
+  </ul>
+</nav>
+
+<section class="hero">
+  <div class="hero-glow"></div>
+  <div>
+    <div class="hero-badge"><span class="dot"></span> Live Project — 2024/25</div>
+    <h1 class="hero-title">
+      <span class="line1">CHILD</span>
+      <span class="line2">PROTECTION</span>
+      <span class="line3">Dog Bark Detection & Ultrasonic Safety Alert System</span>
+    </h1>
+    <p class="hero-desc">
+      A wearable ESP32-powered system that detects dog barking in real-time,
+      generates ultrasonic deterrent frequencies (20–40 kHz), and immediately
+      alerts guardians via SMS — designed for child safety outdoors.
+    </p>
+    <div class="hero-cta">
+      <a href="#abstract" class="btn-primary">Read Abstract</a>
+      <a href="#components" class="btn-outline">View Components</a>
+    </div>
+  </div>
+
+  <div class="hero-visual">
+    <div class="waveform">
+      <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+      <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+      <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+      <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+      <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+      <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+      <div class="wave-bar"></div><div class="wave-bar"></div>
+    </div>
+    <div class="status-card">
+      <div class="status-icon">🔊</div>
+      <div>
+        <div class="status-label">Ultrasonic Range</div>
+        <div class="status-val">20 kHz — 40 kHz</div>
+      </div>
+    </div>
+    <div class="status-card" style="margin-top:1px; border-top:none;">
+      <div class="status-icon">📡</div>
+      <div>
+        <div class="status-label">Alert System</div>
+        <div class="status-val">SMS via SIM800L GSM</div>
+      </div>
+    </div>
+    <div class="status-card" style="margin-top:1px; border-top:none;">
+      <div class="status-icon">⚡</div>
+      <div>
+        <div class="status-label">Power Source</div>
+        <div class="status-val">3.7V Li-ion Rechargeable</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="section-divider"></div>
+
+<section id="abstract">
+  <div style="max-width:900px;margin:0 auto;" class="reveal">
+    <div class="section-label">01 — Project Abstract</div>
+    <h2 class="section-title">Why DISCRETION<br>Was Built</h2>
+    <div class="abstract-text">
+      <p>
+        Dog bite incidents involving children are increasing in residential and public areas, creating serious
+        safety concerns for parents and society. Children are particularly vulnerable due to their
+        <span class="highlight">limited ability to react quickly</span> during sudden dog aggression. To address this issue,
+        this project proposes the design and development of a wearable <span class="highlight">Dog Bark Detection and
+        Ultrasonic Safety Alert System</span> that provides real-time protection and emergency communication.
+      </p>
+      <p>
+        The system uses an <span class="highlight">LM393 sound sensor</span> to detect dog barking sounds in the surrounding
+        environment. The detected signal is processed by an <span class="highlight">ESP32 microcontroller</span>, which activates
+        an ultrasonic sound generator operating in the <span class="highlight">20–40 kHz range</span> to help deter aggressive
+        dogs. At the same time, a <span class="highlight">SIM800L GSM module</span> sends an SMS alert to the guardian,
+        ensuring immediate notification during emergency situations.
+      </p>
+      <p>
+        The device is powered by a <span class="highlight">3.7V rechargeable Li-ion battery</span> with a TP4056 charging
+        module and a boost converter for stable voltage regulation. Proper power management ensures reliable
+        operation of both the ESP32 and GSM module. The system is designed to be compact, low-cost, and
+        suitable for wearable implementation such as a <span class="highlight">smartwatch-type device</span>.
+      </p>
+      <p>
+        This project provides a practical, affordable, and portable safety solution aimed at enhancing child
+        protection in outdoor environments, with future scope for <span class="highlight">GPS tracking and AI-based sound
+        classification</span>.
+      </p>
+    </div>
+  </div>
+</section>
+
+<div class="section-divider"></div>
+
+<section id="system-design">
+  <div class="reveal">
+    <div class="section-label">02 — Architecture</div>
+    <h2 class="section-title">System Design</h2>
+    <p style="font-size:0.82rem;color:var(--muted);max-width:640px;line-height:1.8;margin-top:0.8rem;">
+      Block diagram showing the complete hardware architecture — from sound input to dual-output response (ultrasonic deterrent + SMS alert), unified by the ESP32 microcontroller.
+    </p>
+  </div>
+
+  <div class="sysdesign-wrap reveal">
+    <div class="block-diagram">
+      <div class="bd-col" style="margin-right:2rem;">
+        <div class="bd-block power">
+          <div class="bd-block-icon">🔋</div>
+          <div class="bd-block-name">Li-ion Battery</div>
+          <div class="bd-block-sub">3.7V</div>
+        </div>
+        <div class="bd-arrow up-down"><div class="bd-arrow-line"></div><div class="bd-arrow-head"></div></div>
+        <div class="bd-block power">
+          <div class="bd-block-icon">⚡</div>
+          <div class="bd-block-name">TP4056</div>
+          <div class="bd-block-sub">Charge Controller</div>
+        </div>
+        <div class="bd-arrow up-down"><div class="bd-arrow-line"></div><div class="bd-arrow-head"></div></div>
+        <div class="bd-block power">
+          <div class="bd-block-icon">🔌</div>
+          <div class="bd-block-name">Boost Converter</div>
+          <div class="bd-block-sub">3.7V → 5V</div>
+        </div>
+        <div class="bd-label">Power Rail</div>
+      </div>
+
+      <div class="bd-col">
+        <div class="bd-block sensor" id="bd-sensor">
+          <div class="bd-block-icon">🎙️</div>
+          <div class="bd-block-name">LM393</div>
+          <div class="bd-block-sub">Sound Sensor</div>
+        </div>
+        <div class="bd-label">Input</div>
+      </div>
+
+      <div class="bd-arrow"><div class="bd-arrow-line"></div><div class="bd-arrow-head"></div></div>
+
+      <div class="bd-col">
+        <div class="bd-block main" id="bd-esp">
+          <div class="bd-block-icon">🔧</div>
+          <div class="bd-block-name">ESP32</div>
+          <div class="bd-block-sub">Microcontroller</div>
+        </div>
+        <div class="bd-label">Processing Core</div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;justify-content:space-around;height:160px;margin:0 4px;">
+        <div class="bd-arrow" style="width:50px;"><div class="bd-arrow-line" style="background:linear-gradient(90deg,var(--accent3),rgba(57,255,20,0.2))"></div><div class="bd-arrow-head" style="border-left-color:var(--accent3)"></div></div>
+        <div class="bd-arrow" style="width:50px;"><div class="bd-arrow-line" style="background:linear-gradient(90deg,var(--accent2),rgba(255,107,53,0.2))"></div><div class="bd-arrow-head" style="border-left-color:var(--accent2)"></div></div>
+      </div>
+
+      <div class="bd-col" style="gap:2rem;">
+        <div class="bd-block output" id="bd-ultra">
+          <div class="bd-block-icon">📳</div>
+          <div class="bd-block-name">Piezo Transducer</div>
+          <div class="bd-block-sub">20–40 kHz</div>
+        </div>
+        <div class="bd-block alert" id="bd-gsm">
+          <div class="bd-block-icon">📡</div>
+          <div class="bd-block-name">SIM800L GSM</div>
+          <div class="bd-block-sub">SMS Alert</div>
+        </div>
+        <div class="bd-label">Dual Output</div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;justify-content:space-around;height:160px;margin:0 4px;">
+        <div class="bd-arrow" style="width:40px;"><div class="bd-arrow-line" style="background:linear-gradient(90deg,var(--accent3),rgba(57,255,20,0.2))"></div><div class="bd-arrow-head" style="border-left-color:var(--accent3)"></div></div>
+        <div class="bd-arrow" style="width:40px;"><div class="bd-arrow-line" style="background:linear-gradient(90deg,var(--accent2),rgba(255,107,53,0.2))"></div><div class="bd-arrow-head" style="border-left-color:var(--accent2)"></div></div>
+      </div>
+
+      <div class="bd-col" style="gap:2rem;">
+        <div class="bd-block output" style="min-width:110px;">
+          <div class="bd-block-icon">🐕</div>
+          <div class="bd-block-name">Dog Deterred</div>
+          <div class="bd-block-sub">Ultrasonic burst</div>
+        </div>
+        <div class="bd-block alert" style="min-width:110px;">
+          <div class="bd-block-icon">📱</div>
+          <div class="bd-block-name">Guardian SMS</div>
+          <div class="bd-block-sub">Immediate alert</div>
+        </div>
+        <div class="bd-label">Outcome</div>
+      </div>
+    </div>
+
+    <div class="sysdesign-legend">
+      <div class="legend-item"><div class="legend-dot" style="background:#ff6b35"></div> Power Supply Chain</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--accent)"></div> Signal Input Path</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--accent3)"></div> Ultrasonic Output</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--accent2)"></div> GSM Alert Path</div>
+    </div>
+  </div>
+</section>
+
+<div class="section-divider"></div>
+
+<section id="demo">
+  <div class="reveal">
+    <div class="section-label">03 — Interactive Demo</div>
+    <h2 class="section-title">How It Works<br><span style="color:var(--accent);font-size:0.5em;font-weight:400;font-family:'Space Mono',monospace;letter-spacing:0.05em;">Animated System Simulation</span></h2>
+    <p style="font-size:0.82rem;color:var(--muted);max-width:600px;line-height:1.8;margin-top:0.8rem;">
+      Watch the real-time simulation of the DISCRETION system — from bark detection to dual-response activation. Click Play to start.
+    </p>
+  </div>
+
+  <div class="demo-wrap reveal">
+    <div>
+      <div class="demo-player">
+        <canvas class="demo-canvas" id="demoCanvas"></canvas>
+        <div class="demo-stage-label" id="demoStageLabel">STANDBY — Monitoring...</div>
+      </div>
+      <div class="demo-controls">
+        <button class="demo-play-btn" id="demoPlayBtn" title="Play/Pause">▶</button>
+        <div class="demo-progress-wrap">
+          <div class="demo-progress-bar" id="demoProgress"></div>
+        </div>
+        <div class="demo-time" id="demoTime">0:00 / 0:30</div>
+      </div>
+    </div>
+
+    <div class="demo-steps">
+      <div class="demo-step" id="step-0">
+        <div class="demo-step-num">01</div>
+        <div>
+          <div class="demo-step-title">Standby Mode</div>
+          <div class="demo-step-desc">System powered on. LM393 sensor continuously listening. ESP32 in low-power loop awaiting trigger.</div>
+        </div>
+      </div>
+      <div class="demo-step" id="step-1">
+        <div class="demo-step-num">02</div>
+        <div>
+          <div class="demo-step-title">Bark Detected</div>
+          <div class="demo-step-desc">LM393 crosses sound threshold. Digital HIGH signal sent to ESP32 GPIO pin. Interrupt triggered.</div>
+        </div>
+      </div>
+      <div class="demo-step" id="step-2">
+        <div class="demo-step-num">03</div>
+        <div>
+          <div class="demo-step-title">ESP32 Processing</div>
+          <div class="demo-step-desc">Microcontroller validates signal. Activates parallel output routines for deterrent and alert systems.</div>
+        </div>
+      </div>
+      <div class="demo-step" id="step-3">
+        <div class="demo-step-num">04</div>
+        <div>
+          <div class="demo-step-title">Ultrasonic Burst</div>
+          <div class="demo-step-desc">Piezo transducer emits 20–40 kHz pulse. Inaudible to humans but discomforting for aggressive dogs.</div>
+        </div>
+      </div>
+      <div class="demo-step" id="step-4">
+        <div class="demo-step-num">05</div>
+        <div>
+          <div class="demo-step-title">SMS Alert Sent</div>
+          <div class="demo-step-desc">SIM800L dials guardian's number via GSM network. "⚠️ Dog detected near child!" SMS delivered.</div>
+        </div>
+      </div>
+      <div class="demo-step" id="step-5">
+        <div class="demo-step-num">06</div>
+        <div>
+          <div class="demo-step-title">System Reset</div>
+          <div class="demo-step-desc">After cooldown period, system returns to monitoring mode. Ready for next detection event.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="section-divider"></div>
+
+<section id="how">
+  <div class="reveal">
+    <div class="section-label">04 — System Flow</div>
+    <h2 class="section-title">How It Works</h2>
+  </div>
+  <div class="flow-grid reveal">
+    <div class="flow-step">
+      <div class="flow-num">01</div>
+      <div class="flow-icon">🎙️</div>
+      <div class="flow-title">Sound Detection</div>
+      <div class="flow-desc">LM393 sound sensor continuously monitors the surrounding environment for dog barking sounds and triggers on threshold breach.</div>
+      <div class="flow-arrow">→</div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-num">02</div>
+      <div class="flow-icon">🔧</div>
+      <div class="flow-title">Signal Processing</div>
+      <div class="flow-desc">ESP32 microcontroller receives the sensor signal, processes it, and decides whether to activate the deterrent and alert systems.</div>
+      <div class="flow-arrow">→</div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-num">03</div>
+      <div class="flow-icon">📳</div>
+      <div class="flow-title">Ultrasonic Burst</div>
+      <div class="flow-desc">A piezoelectric transducer emits ultrasonic sound in the 20–40 kHz range — inaudible to humans but uncomfortable for aggressive dogs.</div>
+      <div class="flow-arrow">→</div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-num">04</div>
+      <div class="flow-icon">📱</div>
+      <div class="flow-title">SMS Guardian Alert</div>
+      <div class="flow-desc">Simultaneously, the SIM800L GSM module sends an SMS to the registered guardian number for immediate real-world action.</div>
+    </div>
+  </div>
+</section>
+
+<div class="section-divider"></div>
+
+<section id="components">
+  <div class="reveal">
+    <div class="section-label">05 — Hardware Stack</div>
+    <h2 class="section-title">Core Components</h2>
+  </div>
+  <div class="components-grid reveal">
+    <div class="component-card">
+      <div class="comp-tag">Microcontroller</div>
+      <div class="comp-name">ESP32</div>
+      <div class="comp-desc">Dual-core 32-bit LX6 processor serving as the brain of the system. Handles sensor input, logic processing, and controls all output modules.</div>
+      <div class="comp-spec">240 MHz · WiFi + BT · 38 GPIO</div>
+    </div>
+    <div class="component-card">
+      <div class="comp-tag">Sound Sensor</div>
+      <div class="comp-name">LM393</div>
+      <div class="comp-desc">High-sensitivity sound detection module with adjustable threshold. Detects dog barking and sends a digital trigger signal to the ESP32.</div>
+      <div class="comp-spec">3.3V–5V · Digital Output · Adjustable Gain</div>
+    </div>
+    <div class="component-card">
+      <div class="comp-tag">GSM Module</div>
+      <div class="comp-name">SIM800L</div>
+      <div class="comp-desc">Compact quad-band GSM/GPRS module enabling SMS transmission to guardian's phone number. Operates on standard SIM card.</div>
+      <div class="comp-spec">850/900/1800/1900 MHz · UART · AT Commands</div>
+    </div>
+    <div class="component-card">
+      <div class="comp-tag">Ultrasonic Emitter</div>
+      <div class="comp-name">Piezo Transducer</div>
+      <div class="comp-desc">Generates high-frequency ultrasonic sound waves in the 20–40 kHz range. Inaudible to humans but serves as an effective deterrent for dogs.</div>
+      <div class="comp-spec">20–40 kHz · Low Power · Compact Form</div>
+    </div>
+    <div class="component-card">
+      <div class="comp-tag">Power — Charger</div>
+      <div class="comp-name">TP4056</div>
+      <div class="comp-desc">Li-ion battery charging module with overcharge and over-discharge protection. Enables USB-based recharging of the onboard battery.</div>
+      <div class="comp-spec">1A Charge Current · USB-C/Micro · LED Indicators</div>
+    </div>
+    <div class="component-card">
+      <div class="comp-tag">Power — Battery</div>
+      <div class="comp-name">3.7V Li-ion Cell</div>
+      <div class="comp-desc">Compact rechargeable lithium-ion battery providing portable, long-lasting power. Paired with a boost converter for regulated 5V output.</div>
+      <div class="comp-spec">3.7V Nominal · Boost to 5V · Rechargeable</div>
+    </div>
+  </div>
+</section>
+
+<div class="section-divider"></div>
+
+<section id="specs">
+  <div class="reveal">
+    <div class="section-label">06 — Technical Specifications</div>
+    <h2 class="section-title">System Specs</h2>
+  </div>
+  <div class="specs-wrap reveal">
+    <table>
+      <thead>
+        <tr><th>Parameter</th><th>Specification</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Microcontroller</td><td class="spec-val">ESP32 (Dual-core 240 MHz)</td></tr>
+        <tr><td>Sound Sensor</td><td>LM393 with adjustable threshold</td></tr>
+        <tr><td>Ultrasonic Frequency</td><td class="spec-val">20 kHz – 40 kHz</td></tr>
+        <tr><td>GSM Module</td><td>SIM800L (Quad-band 850/900/1800/1900 MHz)</td></tr>
+        <tr><td>Alert Method</td><td>SMS to guardian's registered mobile number</td></tr>
+        <tr><td>Battery</td><td>3.7V Rechargeable Li-ion Cell</td></tr>
+        <tr><td>Charging Module</td><td>TP4056 with protection circuitry</td></tr>
+        <tr><td>Voltage Regulation</td><td>Boost Converter (3.7V → 5V)</td></tr>
+        <tr><td>Form Factor</td><td class="spec-val">Wearable (Smartwatch-type)</td></tr>
+        <tr><td>Target User</td><td>Children in outdoor / residential environments</td></tr>
+        <tr><td>Cost Profile</td><td class="spec-val">Low-cost, consumer-grade components</td></tr>
+        <tr><td>Response Time</td><td>Real-time (immediate on bark detection)</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<div class="section-divider"></div>
+
+<section id="scope">
+  <div class="reveal">
+    <div class="section-label">07 — Future Development</div>
+    <h2 class="section-title">What Comes Next</h2>
+  </div>
+  <div class="scope-grid reveal">
+    <div class="scope-item">
+      <div class="scope-icon">📍</div>
+      <div class="scope-title">GPS Tracking</div>
+      <div class="scope-desc">Integrate a GPS module to transmit the child's real-time location alongside the SMS alert, enabling precise guardian response.</div>
+    </div>
+    <div class="scope-item">
+      <div class="scope-icon">🤖</div>
+      <div class="scope-title">AI Sound Classification</div>
+      <div class="scope-desc">Implement TensorFlow Lite-based on-device ML to classify sounds accurately, reducing false positives from other loud noises.</div>
+    </div>
+    <div class="scope-item">
+      <div class="scope-icon">📲</div>
+      <div class="scope-title">Mobile App Integration</div>
+      <div class="scope-desc">Develop a companion mobile app for live monitoring, alert history, and remote configuration of sensitivity thresholds.</div>
+    </div>
+    <div class="scope-item">
+      <div class="scope-icon">🔋</div>
+      <div class="scope-title">Solar Charging</div>
+      <div class="scope-desc">Add a micro solar panel for extended outdoor use, reducing the frequency of manual charging for wearable deployment.</div>
+    </div>
+    <div class="scope-item">
+      <div class="scope-icon">📶</div>
+      <div class="scope-title">IoT Cloud Dashboard</div>
+      <div class="scope-desc">Cloud connectivity for logging incidents, tracking patterns, and providing community-level safety awareness in residential zones.</div>
+    </div>
+    <div class="scope-item">
+      <div class="scope-icon">🎨</div>
+      <div class="scope-title">Ergonomic Design</div>
+      <div class="scope-desc">Custom 3D-printed child-friendly wristband enclosure with IP-rated water resistance for everyday outdoor durability.</div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="footer-top">
+    <div>
+      <div class="footer-brand">DIS<span>CRETION</span></div>
+      <div class="footer-tagline">Dog Bark Detection & Ultrasonic Safety Alert System — protecting children one beep at a time.</div>
+    </div>
+    <div class="footer-info">
+      <p><strong>Project Category:</strong> Embedded Systems / IoT</p>
+      <p><strong>Platform:</strong> ESP32 + SIM800L + LM393</p>
+      <p><strong>Output:</strong> Wearable Safety Device</p>
+      <p style="margin-top:1rem;"><span class="freq-badge">20–40 kHz</span></p>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <span>© 2025 DISCRETION Project. All rights reserved.</span>
+    <span style="color:var(--accent)">Child Safety · Real-Time Detection · Wearable Tech</span>
+  </div>
+</footer>
+
+<script>
+  // Custom cursor
+  const cursor = document.getElementById('cursor');
+  const ring = document.getElementById('cursorRing');
+  let mx = 0, my = 0, rx = 0, ry = 0;
+  document.addEventListener('mousemove', e => { mx = e.clientX; my = e.clientY; cursor.style.left = mx + 'px'; cursor.style.top = my + 'px'; });
+  function animateRing() {
+    rx += (mx - rx) * 0.12;
+    ry += (my - ry) * 0.12;
+    ring.style.left = rx + 'px';
+    ring.style.top = ry + 'px';
+    requestAnimationFrame(animateRing);
+  }
+  animateRing();
+
+  // Scroll reveal
+  const reveals = document.querySelectorAll('.reveal');
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); observer.unobserve(e.target); } });
+  }, { threshold: 0.1 });
+  reveals.forEach(r => observer.observe(r));
+
+  // Block diagram animation
+  const bdBlocks = [
+    document.getElementById('bd-sensor'),
+    document.getElementById('bd-esp'),
+    document.getElementById('bd-ultra'),
+    document.getElementById('bd-gsm')
+  ];
+  let bdIdx = 0;
+  setInterval(() => {
+    bdBlocks.forEach(b => b && b.classList.remove('active-anim'));
+    if (bdBlocks[bdIdx]) bdBlocks[bdIdx].classList.add('active-anim');
+    bdIdx = (bdIdx + 1) % bdBlocks.length;
+  }, 900);
+
+  // Demo canvas animation
+  const canvas = document.getElementById('demoCanvas');
+  if (canvas) {
+    const ctx = canvas.getContext('2d');
+    const stageLabel = document.getElementById('demoStageLabel');
+    const progressBar = document.getElementById('demoProgress');
+    const timeLabel = document.getElementById('demoTime');
+    const playBtn = document.getElementById('demoPlayBtn');
+
+    const TOTAL = 30;
+    const STAGES = [
+      { t: 0,  label: 'STANDBY — Monitoring...', step: 0 },
+      { t: 5,  label: 'BARK DETECTED — Signal triggered!', step: 1 },
+      { t: 10, label: 'ESP32 PROCESSING — Logic running...', step: 2 },
+      { t: 15, label: 'ULTRASONIC BURST — 20–40 kHz active', step: 3 },
+      { t: 20, label: 'SMS SENT — Guardian alerted!', step: 4 },
+      { t: 26, label: 'SYSTEM RESET — Returning to standby', step: 5 },
+    ];
+
+    let playing = false, elapsed = 0, lastTime = null, animId = null, particles = [];
+
+    function resizeCanvas() { canvas.width = canvas.offsetWidth; canvas.height = canvas.offsetHeight; }
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+
+    function getStage(t) {
+      let s = STAGES[0];
+      for (const st of STAGES) { if (t >= st.t) s = st; }
+      return s;
+    }
+
+    function spawnParticles(type, cx, cy) {
+      for (let i = 0; i < 6; i++) {
+        const angle = (Math.PI * 2 / 6) * i + Math.random() * 0.5;
+        particles.push({
+          x: cx, y: cy,
+          vx: Math.cos(angle) * (1.5 + Math.random() * 2),
+          vy: Math.sin(angle) * (1.5 + Math.random() * 2),
+          life: 1, decay: 0.02 + Math.random() * 0.02,
+          r: 2 + Math.random() * 3,
+          color: type === 'ultra' ? '#39ff14' : type === 'sms' ? '#ff6b35' : '#00e5ff'
+        });
+      }
+    }
+
+    function drawFrame(t) {
+      const W = canvas.width, H = canvas.height;
+      ctx.clearRect(0, 0, W, H);
+      ctx.fillStyle = '#0d1a22';
+      ctx.fillRect(0, 0, W, H);
+      ctx.strokeStyle = 'rgba(0,229,255,0.04)';
+      ctx.lineWidth = 1;
+      for (let x = 0; x < W; x += 30) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
+      for (let y = 0; y < H; y += 30) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+
+      const stage = getStage(t);
+      const cx = W / 2, cy = H / 2;
+
+      if (stage.step === 0 || stage.step === 5) {
+        const pulse = ((t % 2) / 2);
+        for (let i = 0; i < 3; i++) {
+          const r = 30 + i * 35 + pulse * 35;
+          const alpha = 1 - (r - 30) / 140;
+          ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
+          ctx.strokeStyle = `rgba(0,229,255,${alpha * 0.3})`; ctx.lineWidth = 1.5; ctx.stroke();
+        }
+        ctx.fillStyle = '#00e5ff'; ctx.beginPath(); ctx.arc(cx, cy, 10, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#0d1a22'; ctx.font = 'bold 9px "Space Mono"'; ctx.textAlign = 'center'; ctx.fillText('LM393', cx, cy + 3);
+        ctx.fillStyle = '#6a8fa0'; ctx.font = '10px "Space Mono"'; ctx.fillText('Listening for bark...', cx, cy + 50);
+      }
+
+      if (stage.step === 1) {
+        const prog = (t - 5) / 5;
+        ctx.beginPath(); ctx.strokeStyle = '#00e5ff'; ctx.lineWidth = 2;
+        for (let x = 0; x < W; x++) {
+          const amp = 40 + Math.sin(x * 0.02 + t * 8) * 20;
+          const y = cy + Math.sin(x * 0.05 + t * 10) * amp * Math.min(prog * 3, 1);
+          x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+        ctx.font = '40px serif'; ctx.textAlign = 'center'; ctx.fillText('🐕', W * 0.2, cy - 20);
+        ctx.fillStyle = `rgba(0,229,255,${0.05 * Math.sin(t * 20) + 0.05})`; ctx.fillRect(0, 0, W, H);
+        ctx.fillStyle = '#00e5ff'; ctx.font = 'bold 11px "Space Mono"'; ctx.textAlign = 'center';
+        ctx.fillText('⚡ SIGNAL THRESHOLD EXCEEDED', cx, H - 30);
+        if (Math.random() < 0.3) spawnParticles('sense', cx, cy);
+      }
+
+      if (stage.step === 2) {
+        const bw = 120, bh = 80;
+        ctx.strokeStyle = '#00e5ff'; ctx.lineWidth = 2;
+        ctx.strokeRect(cx - bw/2, cy - bh/2, bw, bh);
+        ctx.fillStyle = 'rgba(0,229,255,0.08)'; ctx.fillRect(cx - bw/2, cy - bh/2, bw, bh);
+        ctx.fillStyle = '#00e5ff'; ctx.font = 'bold 13px "Space Mono"'; ctx.textAlign = 'center'; ctx.fillText('ESP32', cx, cy - 10);
+        ctx.font = '9px "Space Mono"'; ctx.fillStyle = '#6a8fa0'; ctx.fillText('Processing...', cx, cy + 10);
+        const pins = 5;
+        for (let i = 0; i < pins; i++) {
+          const px = cx - bw/2 - 15, py = cy - bh/2 + (bh / (pins + 1)) * (i + 1);
+          const active = Math.floor(t * 3) % pins === i;
+          ctx.fillStyle = active ? '#39ff14' : '#1a3040'; ctx.fillRect(px - 5, py - 3, 20, 6);
+          if (active) { ctx.beginPath(); ctx.arc(px + 15, py, 3, 0, Math.PI*2); ctx.fillStyle='#39ff14'; ctx.fill(); spawnParticles('sense', cx, cy); }
+        }
+        ctx.fillStyle = '#39ff14'; ctx.font = '10px "Space Mono"'; ctx.fillText('Logic: BARK_CONFIRMED → ACTIVATE', cx, H - 30);
+      }
+
+      if (stage.step === 3) {
+        const prog = t - 15;
+        for (let i = 1; i <= 6; i++) {
+          const r = (i * 28 + prog * 40) % 200, alpha = 1 - r / 200;
+          ctx.beginPath(); ctx.arc(cx, cy, r, -Math.PI/2 - 0.8, -Math.PI/2 + 0.8);
+          ctx.strokeStyle = `rgba(57,255,20,${alpha * 0.7})`; ctx.lineWidth = 2; ctx.stroke();
+        }
+        ctx.font = '36px serif'; ctx.textAlign = 'center'; ctx.fillText('📳', cx, cy + 12);
+        ctx.fillStyle = '#39ff14'; ctx.font = 'bold 11px "Space Mono"'; ctx.fillText('20–40 kHz ULTRASONIC ACTIVE', cx, H - 30);
+        ctx.font = '32px serif'; ctx.fillText('🐕', cx + 130, cy + 10);
+        ctx.font = '9px "Space Mono"'; ctx.fillStyle = '#ff6b35'; ctx.fillText('← deterred!', cx + 125, cy + 45);
+        if (Math.random() < 0.4) spawnParticles('ultra', cx, cy);
+      }
+
+      if (stage.step === 4) {
+        const pw = 70, ph = 120;
+        ctx.strokeStyle = '#ff6b35'; ctx.lineWidth = 2;
+        ctx.strokeRect(cx + 40, cy - ph/2, pw, ph);
+        ctx.fillStyle = 'rgba(255,107,53,0.06)'; ctx.fillRect(cx + 40, cy - ph/2, pw, ph);
+        ctx.fillStyle = '#0d1a22'; ctx.fillRect(cx + 46, cy - ph/2 + 10, pw - 12, ph - 30);
+        ctx.fillStyle = '#39ff14'; ctx.font = '7px "Space Mono"'; ctx.textAlign = 'left';
+        ctx.fillText('⚠️ Dog detected', cx + 49, cy - 20);
+        ctx.fillText('near child!', cx + 49, cy - 8);
+        if (Math.floor(t * 2) % 2 === 0) { ctx.fillStyle = '#ff6b35'; ctx.fillText('SMS DELIVERED ✓', cx + 49, cy + 8); }
+        ctx.textAlign = 'center'; ctx.font = '28px serif'; ctx.fillText('📡', cx - 30, cy + 10);
+        for (let i = 1; i <= 3; i++) {
+          const p2 = ((t * 1.5 + i * 0.3) % 1.5) / 1.5;
+          ctx.beginPath(); ctx.arc(cx - 20, cy, 20 + i * 18 * p2, -Math.PI*0.7, -Math.PI*0.3);
+          ctx.strokeStyle = `rgba(255,107,53,${1 - p2})`; ctx.lineWidth = 1.5; ctx.stroke();
+        }
+        ctx.fillStyle = '#ff6b35'; ctx.font = 'bold 11px "Space Mono"'; ctx.fillText('GUARDIAN NOTIFIED via GSM SMS', cx, H - 30);
+        if (Math.random() < 0.3) spawnParticles('sms', cx, cy);
+      }
+
+      particles = particles.filter(p => p.life > 0);
+      for (const p of particles) {
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.r * p.life, 0, Math.PI*2);
+        ctx.fillStyle = p.color + Math.floor(p.life*255).toString(16).padStart(2,'0'); ctx.fill();
+        p.x += p.vx; p.y += p.vy; p.life -= p.decay;
+      }
+    }
+
+    function loop(ts) {
+      if (!lastTime) lastTime = ts;
+      elapsed = Math.min(elapsed + (ts - lastTime) / 1000, TOTAL);
+      lastTime = ts;
+      drawFrame(elapsed);
+      const st = getStage(elapsed);
+      stageLabel.textContent = st.label;
+      progressBar.style.width = (elapsed / TOTAL * 100) + '%';
+      const s = Math.floor(elapsed);
+      timeLabel.textContent = `0:${String(s).padStart(2,'0')} / 0:30`;
+      document.querySelectorAll('.demo-step').forEach((el, i) => el.classList.toggle('active', i === st.step));
+      if (elapsed < TOTAL) { animId = requestAnimationFrame(loop); }
+      else { playing = false; playBtn.textContent = '↺'; }
+    }
+
+    playBtn.addEventListener('click', () => {
+      if (playing) { playing = false; cancelAnimationFrame(animId); playBtn.textContent = '▶'; lastTime = null; }
+      else {
+        if (elapsed >= TOTAL) { elapsed = 0; particles = []; }
+        playing = true; playBtn.textContent = '⏸'; lastTime = null;
+        animId = requestAnimationFrame(loop);
+      }
+    });
+
+    drawFrame(0);
+  }
+</script>
+</body>
+</html>
